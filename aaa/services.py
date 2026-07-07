@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 from typing import Optional
 
 from django.utils import timezone
@@ -107,11 +108,56 @@ def normalize_accounting_payload(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+MAC_ADDRESS_KEYS = ["callingStationId", "Calling-Station-Id", "macAddress"]
+
+# "serviceType" is a literal string set per FreeRADIUS virtual server config
+# (see docs/freeradius-isp-platform-rest.conf in isp-express-main), not a
+# RADIUS Service-Type AVP. A dedicated MAC-auth virtual server sends
+# "serviceType": "mac"; PPPoE/Hotspot servers send "pppoe" / "hotspot" and
+# must match the subscriber's provisioned service_type.
+SERVICE_TYPES_REQUIRING_MATCH = {"pppoe", "hotspot"}
+
+
 def get_subscriber_context(username: str) -> tuple[Subscriber, "Plan", "Customer"]:
     from .exceptions import AppError
 
     subscriber = (
         Subscriber.objects.select_related("plan", "customer").filter(username=username).first()
+    )
+    if subscriber is None:
+        raise AppError("Subscriber not found", 404)
+
+    plan = subscriber.plan
+    customer = subscriber.customer
+    if plan is None or customer is None:
+        raise AppError("Subscriber context is incomplete", 400)
+
+    return subscriber, plan, customer
+
+
+def _mac_lookup_candidates(raw_mac: str) -> list[str]:
+    hex_only = re.sub(r"[^0-9a-fA-F]", "", raw_mac)
+    if len(hex_only) != 12:
+        return []
+
+    candidates = set()
+    for cased in (hex_only.lower(), hex_only.upper()):
+        candidates.add(cased)
+        candidates.add(":".join(cased[i : i + 2] for i in range(0, 12, 2)))
+        candidates.add("-".join(cased[i : i + 2] for i in range(0, 12, 2)))
+    return list(candidates)
+
+
+def get_subscriber_by_mac(raw_mac: str) -> tuple[Subscriber, "Plan", "Customer"]:
+    from .exceptions import AppError
+
+    candidates = _mac_lookup_candidates(raw_mac)
+    subscriber = (
+        Subscriber.objects.select_related("plan", "customer")
+        .filter(mac_address__in=candidates)
+        .first()
+        if candidates
+        else None
     )
     if subscriber is None:
         raise AppError("Subscriber not found", 404)
@@ -151,25 +197,52 @@ def _log(
 
 def authenticate(payload: dict) -> dict:
     username = payload.get("username", "")
+    password = str(payload.get("password", ""))
+    calling_station_id = get_string(payload, MAC_ADDRESS_KEYS)
+    requested_service_type = get_string(payload, ["serviceType", "Service-Type"]).lower()
+
+    auth_method = "mac" if requested_service_type == "mac" else "password"
+    log_identity = username or calling_station_id
 
     try:
-        subscriber, plan, customer = get_subscriber_context(username)
+        if auth_method == "mac":
+            subscriber, plan, customer = get_subscriber_by_mac(calling_station_id or username)
+            is_expired = bool(subscriber.expires_at) and subscriber.expires_at < timezone.now()
+            eligible = (
+                customer.status == "active"
+                and subscriber.status == "active"
+                and plan.status == "active"
+                and not is_expired
+            )
+            reject_message = "Subscriber is not eligible for service"
+        else:
+            subscriber, plan, customer = get_subscriber_context(username)
+            password_matches = verify_password(password, subscriber.password_hash)
+            is_expired = bool(subscriber.expires_at) and subscriber.expires_at < timezone.now()
+            service_type_matches = (
+                requested_service_type not in SERVICE_TYPES_REQUIRING_MATCH
+                or requested_service_type == subscriber.service_type
+            )
 
-        password_matches = verify_password(payload.get("password", ""), subscriber.password_hash)
-        is_expired = bool(subscriber.expires_at) and subscriber.expires_at < timezone.now()
-
-        eligible = (
-            password_matches
-            and customer.status == "active"
-            and subscriber.status == "active"
-            and plan.status == "active"
-            and not is_expired
-        )
+            eligible = (
+                password_matches
+                and customer.status == "active"
+                and subscriber.status == "active"
+                and plan.status == "active"
+                and not is_expired
+                and service_type_matches
+            )
+            reject_message = (
+                "Subscriber is not provisioned for this service type"
+                if password_matches and not service_type_matches
+                else "Subscriber is not eligible for service"
+            )
 
         if eligible:
             response = {
                 "outcome": "Access-Accept",
                 "replyMessage": "Subscriber authenticated successfully",
+                "authMethod": auth_method,
                 "attributes": {
                     "serviceType": subscriber.service_type,
                     "planCode": plan.plan_code,
@@ -178,29 +251,40 @@ def authenticate(payload: dict) -> dict:
         else:
             response = {
                 "outcome": "Access-Reject",
-                "replyMessage": "Subscriber is not eligible for service",
+                "replyMessage": reject_message,
+                "authMethod": auth_method,
             }
 
         _log(
             "authenticate",
             "accept" if eligible else "reject",
             response["replyMessage"],
-            username,
+            log_identity,
             payload,
             response,
             subscriber,
         )
         return response
     except Exception:
-        logger.exception("Internal AAA authentication failed for username=%s", username)
-        response = {"outcome": "Access-Reject", "replyMessage": "Authentication failed"}
-        _log("authenticate", "reject", "Authentication failed", username, payload, response)
+        logger.exception("Internal AAA authentication failed for username=%s", log_identity)
+        response = {
+            "outcome": "Access-Reject",
+            "replyMessage": "Authentication failed",
+            "authMethod": auth_method,
+        }
+        _log("authenticate", "reject", "Authentication failed", log_identity, payload, response)
         return response
 
 
 def authorize(payload: dict) -> dict:
     username = payload.get("username", "")
-    subscriber, plan, _customer = get_subscriber_context(username)
+    calling_station_id = get_string(payload, MAC_ADDRESS_KEYS)
+    requested_service_type = get_string(payload, ["serviceType", "Service-Type"]).lower()
+
+    if requested_service_type == "mac":
+        subscriber, plan, _customer = get_subscriber_by_mac(calling_station_id or username)
+    else:
+        subscriber, plan, _customer = get_subscriber_context(username)
 
     response = {
         "outcome": "Access-Accept",

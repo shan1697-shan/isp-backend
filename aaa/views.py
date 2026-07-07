@@ -27,8 +27,19 @@ class InternalAaaView(APIView):
 
 class AuthenticateView(InternalAaaView):
     def post(self, request):
-        _require(request.data, "username", "password", "nasIpAddress")
-        return Response(services.authenticate(request.data))
+        payload = request.data
+        _require(payload, "nasIpAddress")
+
+        has_username = bool(str(payload.get("username", "")).strip())
+        has_mac = bool(services.get_string(payload, services.MAC_ADDRESS_KEYS))
+        if not has_username and not has_mac:
+            raise AppError(
+                "Validation failed",
+                400,
+                {"missingFields": ["username or callingStationId"]},
+            )
+
+        return Response(services.authenticate(payload))
 
 
 class AuthorizeView(InternalAaaView):
