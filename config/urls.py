@@ -3,6 +3,11 @@ from django.http import JsonResponse
 from django.urls import include, path
 from django.utils import timezone
 
+from customers.views import CustomerListCreateView
+from payments.views import PaymentListCreateView
+from plans.views import PlanListCreateView
+from subscribers.views import SubscriberListCreateView
+
 
 def health(_request):
     return JsonResponse(
@@ -19,6 +24,21 @@ urlpatterns = [
     path("health", health),
     path("internal/aaa/", include("aaa.urls")),
     path("api/v1/auth/", include("accounts.urls")),
+    # Node/Express routing doesn't distinguish "/api/v1/customers" from
+    # "/api/v1/customers/" (non-strict routing). Django does, and unlike GET,
+    # a POST/PATCH to the no-slash form can't be transparently redirected
+    # (APPEND_SLASH drops the body) - so both exact forms are registered here
+    # for every bare collection endpoint, matching the Node reference exactly.
+    path("api/v1/customers", CustomerListCreateView.as_view()),
+    path("api/v1/customers/", include("customers.urls")),
+    path("api/v1/subscribers", SubscriberListCreateView.as_view()),
+    path("api/v1/subscribers/", include("subscribers.urls")),
+    path("api/v1/plans", PlanListCreateView.as_view()),
+    path("api/v1/plans/", include("plans.urls")),
+    path("api/v1/", include("aaa.admin_urls")),
     path("api/v1/billing/", include("billing.urls")),
+    path("api/v1/payments", PaymentListCreateView.as_view()),
     path("api/v1/payments/", include("payments.urls")),
+    path("api/v1/dashboard/", include("dashboard.urls")),
+    path("api/v1/network/", include("network.urls")),
 ]
