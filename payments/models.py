@@ -25,6 +25,7 @@ class Payment(models.Model):
     notes = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self) -> str:
         return self.payment_reference

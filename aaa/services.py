@@ -122,7 +122,9 @@ def get_subscriber_context(username: str) -> tuple[Subscriber, "Plan", "Customer
     from .exceptions import AppError
 
     subscriber = (
-        Subscriber.objects.select_related("plan", "customer").filter(username=username).first()
+        Subscriber.objects.select_related("plan", "customer")
+        .filter(username=username, deleted_at__isnull=True)
+        .first()
     )
     if subscriber is None:
         raise AppError("Subscriber not found", 404)
@@ -154,7 +156,7 @@ def get_subscriber_by_mac(raw_mac: str) -> tuple[Subscriber, "Plan", "Customer"]
     candidates = _mac_lookup_candidates(raw_mac)
     subscriber = (
         Subscriber.objects.select_related("plan", "customer")
-        .filter(mac_address__in=candidates)
+        .filter(mac_address__in=candidates, deleted_at__isnull=True)
         .first()
         if candidates
         else None

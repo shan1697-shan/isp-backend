@@ -1,5 +1,8 @@
 from collections import defaultdict
 
+from django.utils import timezone
+
+from aaa.exceptions import AppError
 from aaa.models import ActiveSession
 
 from .models import NasDevice
@@ -8,6 +11,9 @@ from .models import NasDevice
 def _sync_nas_devices_from_sessions() -> None:
     for session in ActiveSession.objects.all():
         service_types = ["pppoe"] if session.called_station_id else []
+        # Deliberately not scoped to deleted_at__isnull=True: nas_ip_address is
+        # unique, so a device coming back online must revive its existing row
+        # (via deleted_at=None below) rather than collide on a fresh insert.
         NasDevice.objects.update_or_create(
             nas_ip_address=session.nas_ip_address,
             defaults={
@@ -16,6 +22,7 @@ def _sync_nas_devices_from_sessions() -> None:
                 "status": NasDevice.Status.ONLINE,
                 "last_seen_at": session.last_interim_at or session.started_at,
                 "service_types": service_types,
+                "deleted_at": None,
             },
         )
 
@@ -31,7 +38,9 @@ def list_nas_devices() -> list[dict]:
         active_counts[nas_ip_address] += 1
         active_subscribers[nas_ip_address].add(username)
 
-    devices = NasDevice.objects.all().order_by("-last_seen_at", "-created_at")
+    devices = NasDevice.objects.filter(deleted_at__isnull=True).order_by(
+        "-last_seen_at", "-created_at"
+    )
 
     results = []
     for device in devices:
@@ -43,3 +52,11 @@ def list_nas_devices() -> list[dict]:
             }
         )
     return results
+
+
+def delete_nas_device(device_id) -> None:
+    device = NasDevice.objects.filter(id=device_id, deleted_at__isnull=True).first()
+    if device is None:
+        raise AppError("NAS device not found", 404)
+    device.deleted_at = timezone.now()
+    device.save(update_fields=["deleted_at"])

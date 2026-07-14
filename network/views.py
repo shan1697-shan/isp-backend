@@ -1,4 +1,5 @@
 from rest_framework.response import Response
+from rest_framework.status import HTTP_204_NO_CONTENT
 
 from accounts.views import AdminAPIView
 
@@ -16,3 +17,9 @@ class NasDeviceListView(AdminAPIView):
             device_data["active_subscribers"] = entry["active_subscribers"]
             data.append(device_data)
         return Response(data)
+
+
+class NasDeviceDetailView(AdminAPIView):
+    def delete(self, request, device_id):
+        services.delete_nas_device(device_id)
+        return Response(status=HTTP_204_NO_CONTENT)

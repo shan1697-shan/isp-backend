@@ -1,10 +1,11 @@
 from rest_framework import serializers
 
 from .models import Customer
+from .sequences import next_customer_code
 
 
 class CustomerSerializer(serializers.ModelSerializer):
-    customer_code = serializers.CharField(min_length=3, max_length=64)
+    customer_code = serializers.CharField(read_only=True)
     full_name = serializers.CharField(min_length=2, max_length=255)
     phone = serializers.CharField(min_length=6, max_length=32)
     address = serializers.CharField(min_length=5, max_length=255)
@@ -27,3 +28,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def create(self, validated_data):
+        validated_data["customer_code"] = next_customer_code()
+        return super().create(validated_data)

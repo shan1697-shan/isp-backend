@@ -18,8 +18,10 @@ class DashboardOverviewView(AdminAPIView):
             day=1, hour=0, minute=0, second=0, microsecond=0
         )
 
-        total_customers = Customer.objects.count()
-        active_subscribers = Subscriber.objects.filter(status=Subscriber.Status.ACTIVE).count()
+        total_customers = Customer.objects.filter(deleted_at__isnull=True).count()
+        active_subscribers = Subscriber.objects.filter(
+            status=Subscriber.Status.ACTIVE, deleted_at__isnull=True
+        ).count()
         online_users = ActiveSession.objects.filter(status=ActiveSession.Status.ONLINE).count()
 
         monthly_revenue = (

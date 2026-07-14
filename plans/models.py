@@ -29,6 +29,7 @@ class Plan(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self) -> str:
         return f"{self.plan_code} - {self.name}"

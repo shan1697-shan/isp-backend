@@ -1,5 +1,5 @@
 from rest_framework.response import Response
-from rest_framework.status import HTTP_201_CREATED
+from rest_framework.status import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from accounts.views import AdminAPIView
 from aaa.exceptions import AppError
@@ -38,3 +38,13 @@ class PaymentListCreateView(AdminAPIView):
             }
         )
         return Response(PaymentSerializer(payment).data, status=HTTP_201_CREATED)
+
+
+class PaymentDetailView(AdminAPIView):
+    def get(self, request, payment_id):
+        payment = services.get_payment(payment_id)
+        return Response(PaymentSerializer(payment).data)
+
+    def delete(self, request, payment_id):
+        services.delete_payment(payment_id)
+        return Response(status=HTTP_204_NO_CONTENT)

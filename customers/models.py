@@ -22,6 +22,16 @@ class Customer(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self) -> str:
         return f"{self.customer_code} - {self.full_name}"
+
+
+class CustomerCodeSequence(models.Model):
+    """Backs atomic customer_code generation (see customers/sequences.py)."""
+
+    last_value = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"CustomerCodeSequence({self.last_value})"

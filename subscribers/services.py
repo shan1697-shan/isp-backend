@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from aaa.exceptions import AppError
@@ -14,6 +15,7 @@ __all__ = [
     "get_subscriber",
     "create_subscriber",
     "update_subscriber",
+    "delete_subscriber",
 ]
 
 
@@ -26,16 +28,26 @@ def _get(data: dict, *keys: str, default=None):
 
 
 def list_subscribers():
-    return Subscriber.objects.select_related("customer", "plan").order_by("-created_at")
+    return Subscriber.objects.select_related("customer", "plan").filter(
+        deleted_at__isnull=True
+    ).order_by("-created_at")
 
 
 def get_subscriber(subscriber_id) -> Subscriber:
     subscriber = (
-        Subscriber.objects.select_related("customer", "plan").filter(id=subscriber_id).first()
+        Subscriber.objects.select_related("customer", "plan")
+        .filter(id=subscriber_id, deleted_at__isnull=True)
+        .first()
     )
     if subscriber is None:
         raise AppError("Subscriber not found", 404)
     return subscriber
+
+
+def delete_subscriber(subscriber_id) -> None:
+    subscriber = get_subscriber(subscriber_id)
+    subscriber.deleted_at = timezone.now()
+    subscriber.save(update_fields=["deleted_at"])
 
 
 def create_subscriber(data: dict) -> Subscriber:
@@ -61,11 +73,11 @@ def create_subscriber(data: dict) -> Subscriber:
     if missing:
         raise AppError("Validation failed", 400, {"missingFields": missing})
 
-    customer = Customer.objects.filter(id=customer_id).first()
+    customer = Customer.objects.filter(id=customer_id, deleted_at__isnull=True).first()
     if customer is None:
         raise AppError("Customer not found", 400)
 
-    plan = Plan.objects.filter(id=plan_id).first()
+    plan = Plan.objects.filter(id=plan_id, deleted_at__isnull=True).first()
     if plan is None:
         raise AppError("Plan not found", 400)
 

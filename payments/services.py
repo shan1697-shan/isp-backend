@@ -12,9 +12,26 @@ from .models import Payment
 
 
 def list_payments():
-    return Payment.objects.select_related("invoice", "customer", "subscriber").order_by(
-        "-received_at"
+    return Payment.objects.select_related("invoice", "customer", "subscriber").filter(
+        deleted_at__isnull=True
+    ).order_by("-received_at")
+
+
+def get_payment(payment_id) -> Payment:
+    payment = (
+        Payment.objects.select_related("invoice", "customer", "subscriber")
+        .filter(id=payment_id, deleted_at__isnull=True)
+        .first()
     )
+    if payment is None:
+        raise AppError("Payment not found", 404)
+    return payment
+
+
+def delete_payment(payment_id) -> None:
+    payment = get_payment(payment_id)
+    payment.deleted_at = timezone.now()
+    payment.save(update_fields=["deleted_at"])
 
 
 @transaction.atomic

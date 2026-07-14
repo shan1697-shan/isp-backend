@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
 from django.utils import timezone
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from customers.views import CustomerListCreateView
 from payments.views import PaymentListCreateView
@@ -22,6 +23,9 @@ def health(_request):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health", health),
+    path("api/schema", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     path("internal/aaa/", include("aaa.urls")),
     path("api/v1/auth/", include("accounts.urls")),
     # Node/Express routing doesn't distinguish "/api/v1/customers" from
