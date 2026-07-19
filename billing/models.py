@@ -48,6 +48,7 @@ class BillingAccount(models.Model):
     notes = models.CharField(max_length=255, blank=True)
     last_invoice_at = models.DateTimeField(null=True, blank=True)
     next_invoice_date = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -81,6 +82,7 @@ class Invoice(models.Model):
     )
     notes = models.CharField(max_length=255, blank=True)
     line_items = models.JSONField(default=list, encoder=DjangoJSONEncoder)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -114,6 +116,7 @@ class LedgerEntry(models.Model):
     balance_impact = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.CharField(max_length=255)
     posted_at = models.DateTimeField(db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

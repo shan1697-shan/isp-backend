@@ -1,5 +1,5 @@
 from rest_framework.response import Response
-from rest_framework.status import HTTP_201_CREATED
+from rest_framework.status import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from accounts.views import AdminAPIView
 from aaa.exceptions import AppError
@@ -79,11 +79,21 @@ class InvoiceDetailView(AdminAPIView):
         invoice = services.update_invoice(invoice_id, payload)
         return Response(InvoiceSerializer(invoice).data)
 
+    def delete(self, request, invoice_id):
+        services.delete_invoice(invoice_id)
+        return Response(status=HTTP_204_NO_CONTENT)
+
 
 class LedgerListView(AdminAPIView):
     def get(self, request):
         entries = services.list_ledger()
         return Response(LedgerEntrySerializer(entries, many=True).data)
+
+
+class LedgerEntryDetailView(AdminAPIView):
+    def delete(self, request, entry_id):
+        services.delete_ledger_entry(entry_id)
+        return Response(status=HTTP_204_NO_CONTENT)
 
 
 class AdjustmentCreateView(AdminAPIView):
@@ -133,6 +143,12 @@ class BillingAccountListView(AdminAPIView):
     def get(self, request):
         accounts = services.list_accounts()
         return Response(BillingAccountSerializer(accounts, many=True).data)
+
+
+class BillingAccountDetailView(AdminAPIView):
+    def delete(self, request, account_id):
+        services.delete_billing_account(account_id)
+        return Response(status=HTTP_204_NO_CONTENT)
 
 
 class BillingAccountPlanView(AdminAPIView):

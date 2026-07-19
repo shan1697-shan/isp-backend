@@ -26,6 +26,7 @@ class ActiveSession(models.Model):
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.ONLINE
     )
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -59,6 +60,7 @@ class AccountingRecord(models.Model):
     terminate_cause = models.CharField(max_length=128, blank=True)
     payload = models.JSONField()
     event_at = models.DateTimeField(db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

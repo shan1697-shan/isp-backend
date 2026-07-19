@@ -107,17 +107,23 @@ def sync_billing_accounts(subscriber_ids=None):
 
 def list_accounts():
     sync_billing_accounts()
-    return BillingAccount.objects.select_related("customer", "subscriber", "plan").order_by(
-        "-created_at"
+    return (
+        BillingAccount.objects.select_related("customer", "subscriber", "plan")
+        .filter(deleted_at__isnull=True)
+        .order_by("-created_at")
     )
 
 
 def update_account_plan(account_id, plan_id, sync_subscriber_plan: bool = False) -> BillingAccount:
-    plan = Plan.objects.filter(id=plan_id).first()
+    plan = Plan.objects.filter(id=plan_id, deleted_at__isnull=True).first()
     if plan is None:
         raise AppError("Plan not found", 400)
 
-    account = BillingAccount.objects.select_related("subscriber").filter(id=account_id).first()
+    account = (
+        BillingAccount.objects.select_related("subscriber")
+        .filter(id=account_id, deleted_at__isnull=True)
+        .first()
+    )
     if account is None:
         raise AppError("Billing account not found", 404)
 
@@ -130,6 +136,14 @@ def update_account_plan(account_id, plan_id, sync_subscriber_plan: bool = False)
         subscriber.save(update_fields=["plan"])
 
     return account
+
+
+def delete_billing_account(account_id) -> None:
+    account = BillingAccount.objects.filter(id=account_id, deleted_at__isnull=True).first()
+    if account is None:
+        raise AppError("Billing account not found", 404)
+    account.deleted_at = timezone.now()
+    account.save(update_fields=["deleted_at"])
 
 
 # ---------------------------------------------------------------------------
@@ -469,13 +483,17 @@ def create_adjustment(input_data: dict) -> LedgerEntry:
 
 
 def list_invoices():
-    return Invoice.objects.select_related("customer", "subscriber", "plan").order_by("-created_at")
+    return (
+        Invoice.objects.select_related("customer", "subscriber", "plan")
+        .filter(deleted_at__isnull=True)
+        .order_by("-created_at")
+    )
 
 
 def get_invoice_by_id(invoice_id) -> Invoice:
     invoice = (
         Invoice.objects.select_related("customer", "subscriber", "plan")
-        .filter(id=invoice_id)
+        .filter(id=invoice_id, deleted_at__isnull=True)
         .first()
     )
     if invoice is None:
@@ -483,7 +501,23 @@ def get_invoice_by_id(invoice_id) -> Invoice:
     return invoice
 
 
+def delete_invoice(invoice_id) -> None:
+    invoice = get_invoice_by_id(invoice_id)
+    invoice.deleted_at = timezone.now()
+    invoice.save(update_fields=["deleted_at"])
+
+
 def list_ledger():
-    return LedgerEntry.objects.select_related(
-        "customer", "subscriber", "invoice", "payment"
-    ).order_by("-posted_at")
+    return (
+        LedgerEntry.objects.select_related("customer", "subscriber", "invoice", "payment")
+        .filter(deleted_at__isnull=True)
+        .order_by("-posted_at")
+    )
+
+
+def delete_ledger_entry(entry_id) -> None:
+    entry = LedgerEntry.objects.filter(id=entry_id, deleted_at__isnull=True).first()
+    if entry is None:
+        raise AppError("Ledger entry not found", 404)
+    entry.deleted_at = timezone.now()
+    entry.save(update_fields=["deleted_at"])
